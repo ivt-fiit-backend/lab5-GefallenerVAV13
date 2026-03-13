@@ -1,6 +1,6 @@
 import json
 from flask import Flask, abort, jsonify, request
-from flask_restx import Api  # type: ignore
+from flask_restx import Api, Namespace, Resource, fields
 
 PAGE_SIZE = 25
 
@@ -10,7 +10,8 @@ api = Api(app)
 with open('awards.json', encoding='utf-8') as f:
     awards = json.load(f)
 
-# TODO: Добавить код для чтения лауреатов из файла
+with open('laureats.json', encoding='utf-8') as f:
+    laureats = json.load(f)
 
 
 @app.route("/api/v1/awards/")
@@ -38,7 +39,57 @@ def award_object(pk):
         abort(404)
 
 
-# TODO: Добавить код для получения списка лауреатов
+v2_ns = Namespace('v2', description='Laureates API')
+
+laureate_model = v2_ns.model('Laureate', {
+    'id': fields.String,
+    'knownName': fields.Raw,
+    'givenName': fields.Raw,
+    'familyName': fields.Raw,
+    'gender': fields.String,
+    'birth': fields.Raw
+})
 
 
-# TODO: Добавить код для получения лауреата по индексу
+@v2_ns.route('/laureats/')
+class LaureatesList(Resource):
+    @v2_ns.doc('list_laureates')
+    def get(self):
+        try:
+            p = int(request.args.get('p', 0))
+            if p < 0:
+                raise ValueError
+        except ValueError:
+            abort(400)
+
+        page_size = 25
+        start = p * page_size
+        end = start + page_size
+        page = laureats[start:end]
+
+        return {
+            'page': p,
+            'count_on_page': page_size,
+            'total': len(laureats),
+            'items': page
+        }
+
+
+@v2_ns.route('/laureat/<int:id>')
+class LaureateResource(Resource):
+    @v2_ns.doc('get_laureate')
+    def get(self, id):
+        laureate = next(
+            (item for item in laureats
+             if str(item.get('id')) == str(id)),
+            None
+        )
+        if laureate is None:
+            abort(404)
+        return laureate
+
+
+api.add_namespace(v2_ns)
+
+if __name__ == '__main__':
+    app.run(debug=True)
